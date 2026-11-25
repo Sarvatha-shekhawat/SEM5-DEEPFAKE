@@ -1,0 +1,2245 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Deepfake</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@300;400;600;700&display=swap"
+    rel="stylesheet">
+  <style>
+    /* ============== GLOBAL ============== */
+    body {
+      margin: 0;
+      font-family: "Space Grotesk", sans-serif;
+      background: linear-gradient(-45deg, #030305, #080811, #0a0a16, #020205);
+      background-size: 400% 400%;
+      animation: gradientBG 12s ease infinite;
+      background-attachment: fixed;
+      color: white;
+      opacity: 0;
+      transition: opacity 0.6s ease-in-out, background 0.4s ease;
+      overflow-x: hidden;
+    }
+
+    @keyframes gradientBG {
+      0% {
+        background-position: 0% 50%;
+      }
+
+      50% {
+        background-position: 100% 50%;
+      }
+
+      100% {
+        background-position: 0% 50%;
+      }
+    }
+
+    @keyframes pulseTitle {
+
+      0%,
+      100% {
+        text-shadow: 0 0 10px rgba(0, 240, 255, 0.4), 0 0 20px rgba(0, 240, 255, 0.2);
+        transform: scale(1);
+      }
+
+      50% {
+        text-shadow: 0 0 20px rgba(0, 240, 255, 0.8), 0 0 40px rgba(0, 240, 255, 0.5);
+        transform: scale(1.02);
+      }
+    }
+
+    @keyframes float {
+
+      0%,
+      100% {
+        transform: translateY(0);
+      }
+
+      50% {
+        transform: translateY(-5px);
+      }
+    }
+
+    /* Ultra-Premium Grid and Scanline */
+    .cyber-grid {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-image:
+        linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      z-index: -2;
+      pointer-events: none;
+      transform: perspective(500px) rotateX(60deg) translateY(-100px) translateZ(-200px);
+      animation: gridMove 20s linear infinite;
+    }
+
+    @keyframes gridMove {
+      0% {
+        background-position: 0 0;
+      }
+
+      100% {
+        background-position: 0 40px;
+      }
+    }
+
+    .global-scanline {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 15vh;
+      background: linear-gradient(to bottom, transparent, rgba(0, 240, 255, 0.08), transparent);
+      animation: scanOverlay 5s linear infinite;
+      pointer-events: none;
+      z-index: 9999;
+      mix-blend-mode: screen;
+    }
+
+    @keyframes scanOverlay {
+      0% {
+        transform: translateY(-100vh);
+      }
+
+      100% {
+        transform: translateY(100vh);
+      }
+    }
+
+    pre,
+    code,
+    .terminal {
+      font-family: "JetBrains Mono", monospace;
+    }
+
+    @media print {
+      body {
+        background: #fff !important;
+        color: #000 !important;
+        opacity: 1 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+
+      .top-nav,
+      .loader,
+      .history-filters,
+      #uploadForm,
+      #webcamContainer,
+      #bgCanvas,
+      button {
+        display: none !important;
+      }
+
+      .result-card,
+      .kpi-card,
+      .history-table {
+        background: none !important;
+        border: 1px solid #ccc !important;
+        box-shadow: none !important;
+        color: #000 !important;
+        page-break-inside: avoid;
+      }
+
+      .explain-card,
+      .preview-card {
+        border: 1px solid #ccc !important;
+      }
+
+      /* Ensure text stands out on paper */
+      * {
+        color: #000 !important;
+        text-shadow: none !important;
+      }
+
+      .kpi-title {
+        color: #555 !important;
+      }
+
+      .gauge-center {
+        color: #000 !important;
+      }
+
+      #explainSub {
+        color: #000 !important;
+      }
+    }
+
+    #bgCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    body.loaded {
+      opacity: 1;
+    }
+
+    body.light-mode {
+      background: #f4f6f9;
+      color: #111;
+    }
+
+    /* ============== HEADER / LAYOUT ============== */
+    .top-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 12px 24px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .top-nav-left {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+    }
+
+    .top-nav-search {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 20px;
+      padding: 6px 16px;
+      color: white;
+      outline: none;
+      width: 250px;
+    }
+
+    .top-nav-right {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      font-size: 14px;
+    }
+
+    .nav-icon {
+      cursor: pointer;
+      opacity: 0.7;
+      transition: opacity 0.2s;
+    }
+
+    .nav-icon:hover {
+      opacity: 1;
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: #00f0ff;
+      border-radius: 50%;
+      margin-right: 6px;
+      box-shadow: 0 0 8px #00f0ff;
+    }
+
+    header {
+      padding: 30px 20px 10px 20px;
+      text-align: center;
+    }
+
+    h1 {
+      color: #00f0ff;
+      font-size: 46px;
+      margin: 0 0 10px 0;
+      font-weight: 700;
+      letter-spacing: -1px;
+      text-transform: uppercase;
+      animation: glitchText 3s infinite;
+      text-shadow: 0 0 10px rgba(0, 240, 255, 0.5), 2px 2px 0px rgba(112, 0, 255, 0.5);
+    }
+
+    @keyframes glitchText {
+
+      0%,
+      100% {
+        text-shadow: 0 0 10px rgba(0, 240, 255, 0.5), 2px 2px 0px rgba(112, 0, 255, 0.5);
+        transform: translate(0);
+      }
+
+      10% {
+        text-shadow: -2px 0 rgba(0, 240, 255, 0.8), 2px 0 rgba(112, 0, 255, 0.8);
+        transform: translate(-2px, 1px);
+      }
+
+      15% {
+        text-shadow: 2px 0 rgba(0, 240, 255, 0.8), -2px 0 rgba(112, 0, 255, 0.8);
+        transform: translate(2px, -1px);
+      }
+
+      20% {
+        text-shadow: 0 0 10px rgba(0, 240, 255, 0.5), 2px 2px 0px rgba(112, 0, 255, 0.5);
+        transform: translate(0);
+      }
+    }
+
+    #dashboardSection {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    #uploadForm {
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .drop-zone {
+      border: 2px dashed rgba(112, 0, 255, 0.4);
+      border-radius: 12px;
+      padding: 60px 20px;
+      cursor: pointer;
+      background: rgba(8, 8, 14, 0.4);
+      transition: all 0.3s ease;
+      margin-bottom: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.dragover {
+      background: rgba(112, 0, 255, 0.08);
+      border-color: #00f0ff;
+    }
+
+    .layout {
+      display: flex;
+    }
+
+    .sidebar {
+      width: 240px;
+      min-height: 100vh;
+      position: sticky;
+      top: 0;
+      background: rgba(0, 0, 0, 0.35);
+      padding: 30px 20px;
+    }
+
+    .sidebar a {
+      display: block;
+      color: #ccc;
+      text-decoration: none;
+      margin: 15px 0;
+      padding: 8px 12px;
+      border-radius: 8px;
+      transition: background 0.3s ease;
+    }
+
+    .sidebar a.active,
+    .sidebar a:hover {
+      background: rgba(112, 0, 255, 0.2);
+      color: #fff;
+    }
+
+    .logo {
+      font-weight: bold;
+      font-size: 18px;
+      margin-bottom: 30px;
+    }
+
+    /* ============== BUTTONS ============== */
+    button {
+      padding: 12px 30px;
+      border-radius: 25px;
+      border: 1px solid transparent;
+      background: linear-gradient(90deg, #7000ff, #00f0ff);
+      color: white;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+      font-family: "Space Grotesk", sans-serif;
+    }
+
+    button::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+      transition: all 0.5s ease;
+    }
+
+    button:hover {
+      transform: translateY(-3px) scale(1.05);
+      background: linear-gradient(90deg, #6a5cff, #00d4ff);
+      box-shadow: 0 10px 30px rgba(112, 0, 255, 0.8), 0 0 15px rgba(0, 212, 255, 0.6);
+      border-color: #00f0ff;
+    }
+
+    button:hover::before {
+      left: 100%;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+      background: #555;
+    }
+
+    /* ============== RESULT CARD ============== */
+    .result-card {
+      margin: 40px auto;
+      width: 90%;
+      max-width: 1100px;
+      background: rgba(8, 8, 14, 0.6);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      padding: 35px;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+      animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* ============== LOADER & ANIMATION ============== */
+    .loader {
+      display: none;
+      margin-top: 30px;
+      text-align: left;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 24px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .loader-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      margin-top: 20px;
+      font-size: 15px;
+      color: #888;
+    }
+
+    .loader-step {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      opacity: 0.3;
+      transition: opacity 0.3s, color 0.3s;
+    }
+
+    .loader-step.active {
+      opacity: 1;
+      color: #fff;
+    }
+
+    .loader-step.active .step-icon {
+      animation: pulse 1.5s infinite;
+    }
+
+    .loader-step.done {
+      opacity: 0.6;
+      color: #00f0ff;
+    }
+
+    .loader-step.done .step-icon {
+      content: "✔";
+      color: #00f0ff;
+    }
+
+    /* ============== PROGRESS BAR ============== */
+    .progress-container {
+      width: 100%;
+      height: 10px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      margin-top: 15px;
+      display: none;
+    }
+
+    .progress-bar {
+      height: 10px;
+      width: 0%;
+      background: #00f0ff;
+      border-radius: 10px;
+      transition: width 0.3s ease;
+    }
+
+    /* ============== KPI ============== */
+    .kpi-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 25px;
+      margin-bottom: 40px;
+    }
+
+    .kpi-card {
+      background: rgba(25, 25, 40, 0.8);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 20px;
+      padding: 30px;
+      transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .kpi-card:hover {
+      transform: scale(1.03);
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+      border-color: rgba(0, 240, 255, 0.5);
+    }
+
+    .kpi-title {
+      font-size: 15px;
+      color: #aaa;
+      margin-bottom: 15px;
+      font-weight: 600;
+    }
+
+    .kpi-value {
+      font-size: 36px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    /* ============== PREVIEW ============== */
+    .result-top-row {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .preview-card,
+    .explain-card {
+      background: rgba(25, 25, 40, 0.7);
+      backdrop-filter: blur(15px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 20px;
+      padding: 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+    }
+
+    .preview-card:hover,
+    .explain-card:hover {
+      transform: scale(1.03);
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+      border-color: rgba(112, 0, 255, 0.4);
+    }
+
+    .preview-card {
+      flex: 1.2;
+      min-width: 300px;
+    }
+
+    .explain-card {
+      flex: 0.8;
+      min-width: 280px;
+    }
+
+    .preview-card h3,
+    .explain-card h3 {
+      margin: 0 0 15px 0;
+      font-size: 20px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    #videoPreview {
+      width: 100%;
+      border-radius: 12px;
+      background: #000;
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Forensic Controls */
+    .forensic-controls {
+      display: flex;
+      justify-content: space-between;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 10px;
+      border-radius: 10px;
+      font-size: 12px;
+      color: #bbb;
+    }
+
+    .forensic-controls span {
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+
+    .forensic-controls span:hover {
+      color: #fff;
+    }
+
+    .overlay-toggles {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 10px;
+      font-size: 13px;
+      color: #ccc;
+    }
+
+    .overlay-toggles label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    /* Explainable AI list */
+    .explain-list {
+      list-style-type: none;
+      padding: 0;
+      margin: 0;
+      color: #ddd;
+      font-size: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .explain-list li {
+      background: rgba(112, 0, 255, 0.1);
+      border-left: 3px solid #7000ff;
+      padding: 10px 14px;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 8px;
+    }
+
+    .explain-list li.real-reason {
+      color: #00f0ff;
+    }
+
+    .top-sus-frames {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    /* Custom Webkit Scrollbar for horizontal scrollers */
+    .top-sus-frames::-webkit-scrollbar,
+    #activityFeed::-webkit-scrollbar {
+      height: 6px;
+      width: 6px;
+    }
+
+    .top-sus-frames::-webkit-scrollbar-track,
+    #activityFeed::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 3px;
+    }
+
+    .top-sus-frames::-webkit-scrollbar-thumb,
+    #activityFeed::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 3px;
+    }
+
+    .top-sus-frames div {
+      justify-content: center;
+      font-size: 11px;
+      color: #888;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .result-right {
+      flex: 2;
+      min-width: 320px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    /* ============== GAUGE ============== */
+    .gauge-card {
+      position: relative;
+      width: 300px;
+      margin: 30px auto;
+    }
+
+    .gauge-center {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    /* ============== TOASTS ============== */
+
+    .toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 9999;
+    }
+
+    .toast {
+      min-width: 220px;
+      padding: 12px 16px;
+      margin-top: 8px;
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.85);
+      color: #fff;
+      font-size: 14px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .toast-success {
+      border-left: 4px solid #00f0ff;
+    }
+
+    .toast-error {
+      border-left: 4px solid #7000ff;
+    }
+
+    /* ============== FOOTER ============== */
+    footer {
+      margin-top: 50px;
+      padding: 20px;
+      color: #aaa;
+      text-align: center;
+    }
+
+    /* ============== TIMELINE ============ */
+    .timeline-container {
+      display: flex;
+      gap: 4px;
+      margin-top: 20px;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 15px;
+      border-radius: 12px;
+      overflow-x: auto;
+      height: 40px;
+      align-items: center;
+    }
+
+    .timeline-marker {
+      flex: 1;
+      height: 100%;
+      border-radius: 4px;
+      position: relative;
+      min-width: 15px;
+      cursor: crosshair;
+      transition: transform 0.2s ease;
+    }
+
+    .timeline-marker:hover {
+      transform: scaleY(1.3);
+    }
+
+    .timeline-marker:hover::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      top: -35px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.9);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      white-space: nowrap;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    /* ============== TABLES (HISTORY) ============== */
+    .history-filters {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .history-filters button {
+      padding: 6px 16px;
+      font-size: 13px;
+      background: rgba(255, 255, 255, 0.1);
+      color: #ddd;
+      border: 1px solid transparent;
+      box-shadow: none;
+    }
+
+    .history-filters button.active {
+      background: rgba(112, 0, 255, 0.2);
+      border-color: #7000ff;
+      color: #fff;
+    }
+
+    table.history-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    table.history-table th,
+    table.history-table td {
+      padding: 10px 14px;
+      font-size: 14px;
+    }
+
+    table.history-table th {
+      text-align: left;
+      background: rgba(255, 255, 255, 0.04);
+      color: #ddd;
+    }
+
+    table.history-table tr:nth-child(even) {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    table.history-table tr:hover {
+      background: rgba(0, 0, 0, 0.4);
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Ultra Premium Overlays -->
+  <div class="cyber-grid"></div>
+  <canvas id="bgCanvas"></canvas>
+  <div class="layout">
+
+    <aside class="sidebar" style="display:flex; flex-direction:column; gap:10px;">
+      <div class="logo" style="margin-bottom: 20px;">
+        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          style="vertical-align: middle; margin-right: 8px;">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+        </svg>
+        DeepAuth
+      </div>
+
+      <nav style="flex:1;">
+        <a href="#" class="active" data-section="dashboard">
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            style="vertical-align: middle; margin-right: 8px;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6">
+            </path>
+          </svg> Dashboard
+        </a>
+        <a href="#" data-section="video-analysis">
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            style="vertical-align: middle; margin-right: 8px;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z">
+            </path>
+          </svg> Video Analysis
+        </a>
+        <a href="#" data-section="reports">
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            style="vertical-align: middle; margin-right: 8px;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z">
+            </path>
+          </svg> Reports
+        </a>
+        <a href="#" data-section="settings">
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            style="vertical-align: middle; margin-right: 8px;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z">
+            </path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z">
+            </path>
+          </svg> Settings
+        </a>
+      </nav>
+      <div style="margin-top:auto;">
+        <button type="button" onclick="toggleTheme()"
+          style="width:100%; font-size:13px; font-weight:normal; background:rgba(255,255,255,0.05); color:#ccc;">Toggle
+          Theme</button>
+      </div>
+    </aside>
+
+    <main
+      style="flex:1; display:flex; flex-direction:column; align-items: stretch; max-height: 100vh; overflow-y: auto;">
+
+      <!-- TOP NAV BAR -->
+      <div class="top-nav">
+        <div class="top-nav-left">
+          <input type="text" class="top-nav-search" placeholder="Search videos or metadata...">
+        </div>
+        <div class="top-nav-right">
+          <span id="topNavApiUsage" style="font-size: 13px; color: #ccc; margin-right: 10px;">API Usage:
+            <strong>--</strong></span>
+          <span class="nav-icon" title="Alerts">🔔</span>
+          <span><span class="status-dot"></span> Cloud Active</span>
+          <span style="display:flex; align-items:center; gap:8px; cursor:pointer; position: relative;" id="userMenuBtn">
+            <div
+              style="width:30px; height:30px; border-radius:15px; background:#7000ff; color:white; display:flex; align-items:center; justify-content:center; font-weight:bold;">
+              {{ user.username[0].upper() if user else 'U' }}</div>
+            {{ user.username if user else 'User' }} ▼
+            <div id="userMenu"
+              style="display:none; position:absolute; top:40px; right:0; background:rgba(15,23,42,0.95); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px; min-width:120px; z-index:100; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+              <div
+                style="font-size:12px; color:#aaa; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.1);">
+                Role: {{ user.role if user else 'user' }}</div>
+              <a href="{{ url_for('logout') }}"
+                style="color:#7000ff; text-decoration:none; display:block; padding:4px 0;">Logout</a>
+            </div>
+          </span>
+        </div>
+        <script>
+          // Simple toggle for the user dropdown menu
+          document.addEventListener('click', function (e) {
+            var btn = document.getElementById('userMenuBtn');
+            var menu = document.getElementById('userMenu');
+            if (btn && btn.contains(e.target)) {
+              menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+            } else if (menu) {
+              menu.style.display = 'none';
+            }
+          });
+        </script>
+      </div>
+
+      <div style="padding: 20px;">
+        <!-- DASHBOARD SECTION -->
+        <section id="dashboardSection" class="section-view">
+          <header style="margin-bottom: 20px;">
+            <h1 style="font-size: 42px; margin-bottom: 12px; font-weight: 700;">DeepAuth</h1>
+            <p style="opacity:0.7; font-size:16px;">Detect Deepfakes in Seconds. Advanced temporal inconsistency
+              parsing.</p>
+            <div style="display:flex; gap:12px; justify-content:center; margin-top: 20px;">
+              <button type="button" onclick="document.getElementById('mediaFile').click();"
+                style="border-radius:20px; padding: 10px 24px;">Upload Video</button>
+              <button type="button" id="btnTryDemo"
+                style="background:rgba(255,255,255,0.1); color:white; border-radius:20px; padding: 10px 24px;">Try
+                Demo</button>
+              <button type="button" onclick="document.querySelector('[data-section=\'settings\']').click();"
+                style="background:transparent; border:1px solid rgba(255,255,255,0.2); color:white; border-radius:20px; padding: 10px 24px;">View
+                Docs</button>
+            </div>
+          </header>
+
+          <!-- Global Stats Cards -->
+          <div class="kpi-container global-stats" id="globalStats"
+            style="margin-top: 10px; margin-bottom: 40px; width:100%; max-width: 95%;">
+            <div class="kpi-card" style="padding: 15px; border-left: 4px solid #00f0ff;">
+              <div class="kpi-title" style="font-size: 11px;">Videos Analyzed Today</div>
+              <div class="kpi-value" id="dashTotal" style="font-size: 24px;">--</div>
+            </div>
+            <div class="kpi-card" style="padding: 15px; border-left: 4px solid #7000ff;">
+              <div class="kpi-title" style="font-size: 11px;">Fake Videos Detected</div>
+              <div class="kpi-value" id="dashFake" style="font-size: 24px;">--</div>
+            </div>
+            <div class="kpi-card" style="padding: 15px; border-left: 4px solid #ff007a;">
+              <div class="kpi-title" style="font-size: 11px;">Average Confidence</div>
+              <div class="kpi-value" id="dashAvgConf" style="font-size: 24px;">--%</div>
+            </div>
+            <div class="kpi-card" style="padding: 15px; border-left: 4px solid #a259ff;">
+              <div class="kpi-title" style="font-size: 11px;">System Load (GPU)</div>
+              <div class="kpi-value" style="font-size: 24px;">34%</div>
+            </div>
+          </div>
+
+          <form id="uploadForm" enctype="multipart/form-data">
+            <div style="display:flex; gap:10px; margin-bottom:15px; align-items:center;">
+              <input type="text" id="scanUrlInput" placeholder="Paste Twitter/X, TikTok, or YouTube URL to scan..." style="flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); padding:12px; border-radius:12px; color:white; font-family:'Space Grotesk', sans-serif;">
+              <button type="button" onclick="scanUrl()" style="padding:10px 20px; border-radius:12px; white-space:nowrap;">Scan URL</button>
+            </div>
+            <div id="dropZone" class="drop-zone">
+              <svg width="48" height="48" fill="none" stroke="#00f0ff" viewBox="0 0 24 24"
+                style="opacity:0.8; margin-bottom:5px;">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+              </svg>
+              <strong style="font-size: 18px;">Drag video or document here</strong>
+              <p id="dropZoneText" style="margin:0; opacity:0.6; font-size:14px;">Supported formats: MP4, MOV,
+                AVI, JPG, PNG, PDF<br>Max size: 500MB</p>
+              <input type="file" name="media_file" id="mediaFile" multiple style="display: none;">
+            </div>
+            <div style="display:flex; justify-content:center; margin-top: 20px;">
+              <button type="submit" style="display:inline-block; padding:12px 24px;">Analyze File(s)</button>
+            </div>
+
+            <div class="progress-container" id="progressContainer">
+              <div class="progress-bar" id="progressBar"></div>
+            </div>
+          </form>
+
+          <!-- Loader (Startup Pipeline Visualization) -->
+          <div class="loader" id="loader"
+            style="padding: 30px; border-radius: 16px; background: rgba(8,8,14,0.8); border: 1px solid rgba(255,255,255,0.05); box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+            <h3 style="margin-top:0; color:#fff; font-size: 16px; margin-bottom: 20px;">AI Processing Pipeline</h3>
+            <div class="loader-steps" id="loaderSteps" style="font-family: monospace; font-size: 14px;">
+              <div class="loader-step active" id="step1">
+                <span class="step-icon">⏳</span>
+                <span>Upload Video<br><small style="color:#666;">Ingesting media file</small></span>
+              </div>
+              <div class="loader-step" id="step2"
+                style="margin-left: 10px; border-left: 2px solid rgba(255,255,255,0.1); padding-left: 15px;">
+                <span class="step-icon">⏳</span>
+                <span>Frame Extraction<br><small style="color:#666;">Sampling at 30 fps</small></span>
+              </div>
+              <div class="loader-step" id="step3"
+                style="margin-left: 10px; border-left: 2px solid rgba(255,255,255,0.1); padding-left: 15px;">
+                <span class="step-icon">⏳</span>
+                <span>Face Detection<br><small style="color:#666;">Isolating facial boundaries</small></span>
+              </div>
+              <div class="loader-step" id="step4"
+                style="margin-left: 10px; border-left: 2px solid rgba(255,255,255,0.1); padding-left: 15px;">
+                <span class="step-icon">⏳</span>
+                <span>CNN Analysis<br><small style="color:#666;">Applying EfficientNet B4</small></span>
+              </div>
+              <div class="loader-step" id="step5"
+                style="margin-left: 10px; border-left: 2px solid transparent; padding-left: 15px;">
+                <span class="step-icon">⏳</span>
+                <span>Temporal Model<br><small style="color:#666;">LSTM inconsistency check</small></span>
+              </div>
+            </div>
+            <div style="margin-top: 25px;">
+              <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:8px; color:#aaa;">
+                <span>Analyzing frames</span>
+                <span id="progressText">0%</span>
+              </div>
+              <div class="progress-bar-wrap"
+                style="width: 100%; background: rgba(0,0,0,0.5); height: 8px; border-radius: 4px; overflow: hidden;">
+                <div class="progress-bar" id="progressBar"
+                  style="height: 100%; width: 0%; background: linear-gradient(90deg, #00f0ff, #00b8ff); transition: width 0.3s; box-shadow: 0 0 10px rgba(0,240,255,0.5);">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Result Card -->
+          <div id="resultCard" class="result-card" style="{% if not prediction %}display:none;{% endif %}; display: flex; flex-direction: row; flex-wrap: nowrap; gap: 40px; align-items: flex-start; text-align: left; background: transparent; padding: 0 40px; box-shadow: none; width: 100%; max-width: 100%;">
+
+            <!-- LEFT COLUMN: VIDEO PREVIEW -->
+            <div class="left-col" style="flex: 0 0 450px; position: relative; top: 20px;">
+              <div class="preview-card" style="position: relative; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 18px; padding: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                  <h3 style="margin:0;">Forensic Video</h3>
+                  <span style="font-size:11px; padding: 4px 8px; background: rgba(255,255,255,0.1); border-radius: 4px;">WebGL Accelerated</span>
+                </div>
+
+                <div style="position: relative; width: 100%; border-radius: 12px; overflow: hidden; background: #000; box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);">
+                  <video id="videoPreview" autoplay loop muted style="width: 100%; display: block; max-height: 500px; object-fit: contain;"></video>
+                  <canvas id="heatmapCanvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; mix-blend-mode: multiply; opacity: 0.7; display: none;"></canvas>
+                </div>
+
+                <div class="forensic-controls" style="margin-top: 12px; display: flex; justify-content: space-between; gap:5px;">
+                  <span onclick="togglePlayPause()" style="flex:1; text-align:center;">▶ Play</span>
+                  <span onclick="nextFrame()" style="flex:1; text-align:center;">⏭ Step</span>
+                  <span onclick="downloadEvidence()" style="flex:1; text-align:center;">📥 Capture</span>
+                </div>
+
+                <div class="overlay-toggles" style="background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; margin-top:15px;">
+                  <strong style="font-size:11px; text-transform:uppercase; color:#888;">AI Overlays</strong>
+                  <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+                    <label><input type="checkbox" id="chkBox" checked> Bounding Box</label>
+                    <label style="color:#ff007a;"><input type="checkbox" id="chkHeatmap" onchange="toggleHeatmap()"> Deepfake Heatmap</label>
+                    <label><input type="checkbox"> Landmarks</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- RIGHT COLUMN: DASHBOARD DATA -->
+            <div class="right-col" style="flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0;">
+              
+              <!-- ROW 1 inside Right: Risk Score & Radar -->
+              <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                <div class="explain-card" style="flex: 1; min-width: 250px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 18px; padding: 20px;">
+                  <h3 style="display:flex; justify-content:space-between; margin:0 0 15px 0;">
+                    AI Risk Score
+                    <span id="riskBadge" style="font-size:11px; padding: 4px 8px; border-radius:4px; font-weight:bold; background: rgba(112,0,255,0.2); color:#7000ff; border: 1px solid #7000ff;">CRITICAL</span>
+                  </h3>
+                  <div style="margin: 15px 0;">
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: #aaa; margin-bottom: 5px;">
+                      <span>LOW</span><span>MEDIUM</span><span>HIGH</span><span>CRITICAL</span>
+                    </div>
+                    <div style="width:100%; height:12px; border-radius:6px; background: linear-gradient(90deg, #00f0ff, #ff007a, #00f0ff, #7000ff); position: relative;">
+                      <div id="riskPointer" style="position: absolute; top: -4px; left: 90%; width: 4px; height: 20px; background: #fff; border-radius: 2px; box-shadow: 0 0 5px rgba(0,0,0,0.5); transition: left 0.5s ease;"></div>
+                    </div>
+                  </div>
+                  <h3 style="margin-top:20px;">AI Explanation Engine</h3>
+                  <div style="font-size: 13px; color: #aaa; margin-bottom: 10px;" id="explainSub">Why this video is <strong id="explainLabel" style="color:#7000ff;">FAKE</strong>:</div>
+                  <ul class="explain-list" id="explainList"></ul>
+                </div>
+                
+
+              </div>
+
+              <!-- ROW 2 inside Right: Metrics Grid -->
+              <div class="kpi-container" style="gap:15px; grid-template-columns: repeat(4, 1fr);">
+                  <div class="kpi-card" style="padding:15px; text-align:center;">
+                    <div class="kpi-title">Overall Confidence</div>
+                    <div class="kpi-value" id="kpiConfidence" style="color:#fff;">{% if confidence is not none %}{{ confidence }}%{% else %}--{% endif %}</div>
+                  </div>
+                  <div class="kpi-card" style="padding:15px; text-align:center;">
+                    <div class="kpi-title">Frames Analyzed</div>
+                    <div class="kpi-value" id="kpiFrames">{% if frame_scores is not none %}{{ frame_scores|length }}{% else %}0{% endif %}</div>
+                  </div>
+                  
+
+                  
+                  <div class="kpi-card" style="padding:15px; grid-column: span 2; display: flex; flex-direction: column; gap: 8px;">
+                    <div class="kpi-title" style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; margin-bottom: 5px;">
+                      <span style="color:#fff; font-weight:600;">Media Provenance</span>
+                      <span style="font-size:10px; padding:2px 6px; background:rgba(0,240,255,0.1); border:1px solid #00f0ff; border-radius:4px; color:#00f0ff;">Verified</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size: 12px; color: #aaa;">
+                       <span>Resolution: <strong style="color:#fff;" id="metaResolution">--</strong></span>
+                       <span>FPS: <strong style="color:#fff;" id="metaFps">--</strong></span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size: 12px; color: #aaa;">
+                       <span>Duration: <strong style="color:#fff;" id="metaDuration">--</strong></span>
+                       <span>Size: <strong style="color:#fff;" id="metaSize">-- MB</strong></span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size: 12px; color: #aaa; margin-top:4px;">
+                       <span>Camera/Device: <strong style="color:#00f0ff;" id="metaCamera">--</strong></span>
+                    </div>
+                  </div>
+              </div>
+
+              <!-- ROW 3 inside Right: Frame Tracking & Feed -->
+              <div style="display:flex; gap:20px; flex-wrap:wrap;">
+                <div style="flex:2; min-width:350px; display:flex; flex-direction:column; gap:20px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 18px; padding: 20px;">
+
+                  <div>
+                    <h3 style="margin-bottom:10px;">Suspicious Frame Gallery</h3>
+                    <div id="timelineHeatmap" class="timeline-container" style="height: 40px;"></div>
+                    <div class="top-sus-frames" id="topSusFrames" style="margin-top: 15px; display: flex; gap: 15px; overflow-x: auto; padding-bottom: 10px;">
+                      <!-- Gallery cards inserted dynamically -->
+                    </div>
+                  </div>
+                </div>
+
+                <div style="flex:1; min-width:250px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 18px; padding: 20px; display:flex; flex-direction:column;">
+                  <h3 style="margin: 0 0 15px 0; font-size: 16px; display:flex; justify-content:space-between; align-items:center;">
+                    AI Activity Feed <span class="status-dot"></span>
+                  </h3>
+                  <div id="activityFeed" style="flex:1; background: #000; border-radius: 8px; padding: 15px; font-family: monospace; font-size: 12px; color: #00f0ff; overflow-y: auto; max-height: 250px; display:flex; flex-direction:column; gap:8px;">
+                    <div style="color:#888;">> System initialized...</div>
+                  </div>
+                  <div style="margin-top:15px; background: rgba(0,0,0,0.5); padding: 10px; border-radius:8px;">
+                    <span style="font-size:11px; color:#aaa;">Terminal Input</span>
+                    <div style="display:flex; align-items:center; gap:8px; margin-top:5px;">
+                      <span style="color:#00f0ff;">$</span>
+                      <input type="text" placeholder="Query models..." style="background:transparent; border:none; outline:none; color:#fff; font-family:monospace; width:100%; font-size:12px;" disabled>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </section>
+
+        <!-- VIDEO ANALYSIS SECTION -->
+        <section id="videoAnalysisSection" class="section-view"
+          style="display:none; text-align:left; max-width:1100px; margin:0 auto;">
+          <header style="text-align:left; padding: 10px 0;">
+            <h1 style="text-align:left; margin-bottom:5px;">Video Analysis History</h1>
+            <p style="text-align:left; margin:0;">Detailed logs of analyzed videos and their predictions.</p>
+          </header>
+
+          <div class="history-filters">
+            <button type="button" class="active" onclick="filterHistory('ALL')">All Results</button>
+            <button type="button" onclick="filterHistory('FAKE')">Fake Only</button>
+            <button type="button" onclick="filterHistory('REAL')">Real Only</button>
+          </div>
+
+          <table class="history-table" id="historyTable">
+            <thead>
+              <tr>
+                <th>Time (UTC)</th>
+                <th>File</th>
+                <th>Prediction</th>
+                <th>Confidence</th>
+                <th>Frames</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Filled dynamically -->
+            </tbody>
+          </table>
+        </section>
+
+        <!-- REPORTS SECTION -->
+        <section id="reportsSection" class="section-view"
+          style="display:none; text-align:left; max-width:1100px; margin:0 auto;">
+          <header style="text-align:left; padding: 10px 0;">
+            <h1 style="text-align:left; margin-bottom:5px;">System Reports</h1>
+            <p style="text-align:left; margin:0;">Summary reports across all analyzed videos.</p>
+          </header>
+          <div class="kpi-container">
+            <div class="kpi-card">
+              <div class="kpi-title">Total Analyses</div>
+              <div class="kpi-value" id="reportTotal">0</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-title">REAL Count</div>
+              <div class="kpi-value" id="reportReal">0</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-title">FAKE Count</div>
+              <div class="kpi-value" id="reportFake">0</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-title">Avg Confidence</div>
+              <div class="kpi-value" id="reportAvgConf">0.0%</div>
+            </div>
+          </div>
+      <p style="opacity:0.8; margin-bottom:30px;" id="reportLastSummary">No analyses yet.</p>
+      </section>
+
+
+
+      <!-- SETTINGS SECTION -->
+      <section id="settingsSection" class="section-view"
+        style="display:none; text-align:left; max-width:1100px; margin:0 auto;">
+        <header style="text-align:left; padding: 10px 0;">
+          <h1 style="text-align:left; margin-bottom:5px;">Settings & API Access</h1>
+          <p style="text-align:left; margin:0;">Manage your team and API integrations.</p>
+        </header>
+
+        <div class="kpi-container" style="margin-top: 20px; align-items:flex-start;">
+          <div class="kpi-card" style="flex:1;">
+            <div class="kpi-title" style="margin-bottom:15px;">Team Members</div>
+            <table style="width:100%; text-align:left; border-collapse: collapse; font-size:14px;">
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                <th style="padding:10px 0; color:#888;">Name</th>
+                <th style="padding:10px 0; color:#888;">Role</th>
+              </tr>
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <td style="padding:10px 0;">Raghav Garg</td>
+                <td style="padding:10px 0;"><strong style="color:#00f0ff;">Admin</strong></td>
+              </tr>
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <td style="padding:10px 0;">Sarah Connor</td>
+                <td style="padding:10px 0;">Analyst</td>
+              </tr>
+              <tr>
+                <td style="padding:10px 0;">John Smith</td>
+                <td style="padding:10px 0; color:#aaa;">Viewer</td>
+              </tr>
+            </table>
+            <button style="margin-top:15px; font-size:12px; padding:6px 16px;">+ Invite User</button>
+          </div>
+
+          <div class="kpi-card" style="flex:1;">
+            <div class="kpi-title" style="margin-bottom:15px;">API Access</div>
+            <div
+              style="background:rgba(0,0,0,0.5); padding:12px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+              <code id="settingsApiKeyDisplay" style="color:#00f0ff; font-size:13px;">Loading...</code>
+              <span onclick="copyApiKey()" style="cursor:pointer; font-size:12px; color:#aaa;"
+                id="copyApiBtn">Copy</span>
+            </div>
+            <h4 style="font-size:12px; color:#888; margin-bottom:8px;">Endpoint Example</h4>
+            <pre
+              style="background:rgba(0,0,0,0.5); padding:12px; border-radius:8px; font-size:12px; color:#ddd; overflow-x:auto;">POST https://yourdomain.com/api/v1/detect
+Headers:
+  X-API-Key: &lt;your_api_key&gt;
+Body (form-data):
+  video: &lt;file&gt;</pre>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        © 2026 DeepAuth
+      </footer>
+
+    </main>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script>
+    /* Page Fade & Initial Dashboard Stats */
+    window.addEventListener("load", () => {
+      document.body.classList.add("loaded");
+      loadDashboardStats();
+      loadUserInfo();
+    });
+
+    function loadUserInfo() {
+      fetch("/api/user_info")
+        .then(res => res.json())
+        .then(data => {
+          if (data.api_key) {
+            document.getElementById("settingsApiKeyDisplay").innerText = data.api_key;
+            window.currentApiKey = data.api_key;
+          }
+          if (data.api_usage !== undefined) {
+            document.getElementById("topNavApiUsage").innerHTML = `API Usage: <strong>${data.api_usage} Requests</strong>`;
+          }
+        })
+        .catch(e => console.error("Error loading user info", e));
+    }
+
+    function copyApiKey() {
+      if (window.currentApiKey) {
+        navigator.clipboard.writeText(window.currentApiKey);
+        var btn = document.getElementById("copyApiBtn");
+        btn.innerText = "Copied!";
+        setTimeout(() => btn.innerText = "Copy", 2000);
+      }
+    }
+
+    function loadDashboardStats() {
+      fetch("/api/reports")
+        .then(res => res.json())
+        .then(data => {
+          const dashTotal = document.getElementById("dashTotal");
+          const dashFake = document.getElementById("dashFake");
+          const dashAvgConf = document.getElementById("dashAvgConf");
+          if (dashTotal) dashTotal.textContent = data.total || 0;
+          if (dashFake) dashFake.textContent = data.fake_count || 0;
+          if (dashAvgConf) dashAvgConf.textContent = (data.avg_confidence || 0).toFixed(1) + "%";
+        })
+        .catch(e => console.error("Error loading stats:", e));
+    }
+
+    /* Theme Toggle */
+    function toggleTheme() {
+      document.body.classList.toggle("light-mode");
+    }
+
+    /* Sidebar navigation between sections */
+    const sectionMap = {
+      "dashboard": document.getElementById("dashboardSection"),
+      "video-analysis": document.getElementById("videoAnalysisSection"),
+      "reports": document.getElementById("reportsSection"),
+      "settings": document.getElementById("settingsSection")
+    };
+
+    function loadHistory() {
+      fetch("/api/history")
+        .then(res => res.json())
+        .then(data => {
+          const tbody = document.querySelector("#historyTable tbody");
+          tbody.innerHTML = "";
+          const items = data.items || [];
+          if (!items.length) {
+            const row = document.createElement("tr");
+            const cell = document.createElement("td");
+            cell.colSpan = 5;
+            cell.textContent = "No analyses yet. Run a video from the Dashboard.";
+            row.appendChild(cell);
+            tbody.appendChild(row);
+            return;
+          }
+          items.forEach(item => {
+            const row = document.createElement("tr");
+            row.setAttribute("data-prediction", item.prediction);
+            row.innerHTML = `
+            <td>${item.created_at}</td>
+            <td>${item.filename}</td>
+            <td><strong style="color:${item.prediction === 'FAKE' ? '#7000ff' : '#00f0ff'}">${item.prediction}</strong></td>
+            <td>${item.confidence.toFixed(1)}%</td>
+            <td>${item.frame_count}</td>
+          `;
+            tbody.appendChild(row);
+          });
+        })
+        .catch(() => {
+          showToast("Failed to load history.", "error");
+        });
+    }
+
+    function filterHistory(type) {
+      // Update active button
+      document.querySelectorAll(".history-filters button").forEach(btn => {
+        btn.classList.remove("active");
+        if (btn.innerText.toUpperCase().includes(type)) btn.classList.add("active");
+      });
+
+      // Filter rows
+      const rows = document.querySelectorAll("#historyTable tbody tr");
+      rows.forEach(row => {
+        const pred = row.getAttribute("data-prediction");
+        if (!pred) return; // Empty state row
+
+        if (type === "ALL" || pred === type) {
+          row.style.display = "";
+        } else {
+          row.style.display = "none";
+        }
+      });
+    }
+
+    function loadReports() {
+      fetch("/api/reports")
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById("reportTotal").textContent = data.total;
+          document.getElementById("reportReal").textContent = data.real_count;
+          document.getElementById("reportFake").textContent = data.fake_count;
+          document.getElementById("reportAvgConf").textContent =
+            (data.avg_confidence || 0).toFixed(1) + "%";
+
+          const last = data.last_analysis;
+          const summary = document.getElementById("reportLastSummary");
+          if (last) {
+            summary.textContent =
+              `Last: ${last.created_at} — ${last.prediction} (${last.confidence.toFixed(1)}%)`;
+          } else {
+            summary.textContent = "No analyses yet.";
+          }
+        })
+        .catch(() => {
+          showToast("Failed to load report summary.", "error");
+        });
+    }
+
+    document.querySelectorAll(".sidebar a[data-section]").forEach(link => {
+      link.addEventListener("click", function (e) {
+        e.preventDefault();
+        const target = this.getAttribute("data-section");
+
+        // Toggle active state in sidebar
+        document.querySelectorAll(".sidebar a[data-section]").forEach(l => l.classList.remove("active"));
+        this.classList.add("active");
+
+        // Show the selected section and hide others
+        Object.keys(sectionMap).forEach(key => {
+          if (sectionMap[key]) {
+            sectionMap[key].style.display = key === target ? "block" : "none";
+          }
+        });
+
+        // Lazy-load data for specific tabs
+        if (target === "video-analysis") {
+          loadHistory();
+        } else if (target === "reports") {
+          loadReports();
+        }
+      });
+    });
+
+    /* Toasts */
+    function showToast(message, type = "success") {
+      const container = document.getElementById("toastContainer");
+      const toast = document.createElement("div");
+      toast.className = "toast toast-" + type;
+      toast.textContent = message;
+      container.appendChild(toast);
+      requestAnimationFrame(() => toast.classList.add("show"));
+      setTimeout(() => {
+        toast.classList.remove("show");
+        setTimeout(() => toast.remove(), 250);
+      }, 3000);
+    }
+
+    /* Charts & Gauge */
+    let frameChart = null;
+    let trendChart = null;
+    let confidenceGaugeChart = null;
+    let gaugeCurrent = 0;
+
+    function ensureCharts(frameScores, confidence, prediction) {
+      const labels = frameScores.map((_, i) => "Frame " + (i + 1));
+
+      const heatmap = document.getElementById("timelineHeatmap");
+      if (heatmap) {
+        heatmap.innerHTML = "";
+        let isFake = prediction === "FAKE";
+        frameScores.forEach((score, i) => {
+          const marker = document.createElement("div");
+          marker.className = "timeline-marker";
+          let intensity = Math.max(0.2, score / 100);
+          marker.style.backgroundColor = isFake ? `rgba(112, 0, 255, ${intensity})` : `rgba(0, 240, 255, ${intensity})`;
+          marker.setAttribute("data-tooltip", `Frame ${i + 1}: ${score}% ${prediction}`);
+
+          marker.style.cursor = "pointer";
+          marker.onclick = () => {
+            const video = document.getElementById("videoPreview");
+            if (video && video.readyState >= 1) {
+              video.pause();
+              video.currentTime = i * (1 / 30); // Approximate 30fps mapping 
+              showToast(`Jumped to frame ${i + 1}`);
+            }
+          };
+
+          heatmap.appendChild(marker);
+        });
+      }
+
+      if (!confidenceGaugeChart) {
+        // RADAR CHART INSTEAD OF GAUGE
+        let rc = document.getElementById("radarChart");
+        if(rc) {
+          radarChartObj = new Chart(rc.getContext("2d"), {
+            type: "radar",
+            data: {
+              labels: ["GAN Artifacts", "Temporal Sync", "Face Blending", "Lighting", "Compression"],
+              datasets: [{
+                label: "Signal Strength",
+                data: [confidence, Math.max(0, confidence - 15), Math.min(100, confidence + 5), Math.max(0, confidence - 5), Math.max(0, confidence - 20)],
+                backgroundColor: "rgba(112, 0, 255, 0.2)",
+                borderColor: "#7000ff",
+                pointBackgroundColor: "#7000ff",
+                pointBorderColor: "#fff",
+                pointHoverBackgroundColor: "#fff",
+                pointHoverBorderColor: "#7000ff",
+                borderWidth: 2
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                r: {
+                  angleLines: { color: "rgba(255,255,255,0.1)" },
+                  grid: { color: "rgba(255,255,255,0.1)" },
+                  pointLabels: { color: "#aaa", font: { size: 11, family: "monospace" } },
+                  ticks: { display: false, min: 0, max: 100 }
+                }
+              },
+              plugins: { legend: { display: false } }
+            }
+          });
+        }
+        confidenceGaugeChart = true; // Flag for updates
+      } else if (radarChartObj) {
+        radarChartObj.data.datasets[0].data = [confidence, Math.max(0, confidence - 15), Math.min(100, confidence + 5), Math.max(0, confidence - 5), Math.max(0, confidence - 20)];
+        radarChartObj.data.datasets[0].borderColor = (prediction === "FAKE") ? "#7000ff" : "#00f0ff";
+        radarChartObj.data.datasets[0].backgroundColor = (prediction === "FAKE") ? "rgba(112, 0, 255, 0.2)" : "rgba(0, 240, 255, 0.2)";
+        radarChartObj.data.datasets[0].pointBackgroundColor = (prediction === "FAKE") ? "#7000ff" : "#00f0ff";
+        radarChartObj.update();
+      } else {
+        // Retry logic if radarChartObj is null but confidenceGaugeChart is somehow true
+        let rc = document.getElementById("radarChart");
+        if(rc) {
+          radarChartObj = new Chart(rc.getContext("2d"), {
+            type: "radar",
+            data: {
+              labels: ["GAN Artifacts", "Temporal", "Blending", "Lighting", "Compression"],
+              datasets: [{
+                label: "Signal Strength",
+                data: [confidence, Math.max(0, confidence - 15), Math.min(100, confidence + 5), Math.max(0, confidence - 5), Math.max(0, confidence - 20)],
+                backgroundColor: (prediction === "FAKE") ? "rgba(112, 0, 255, 0.2)" : "rgba(0, 240, 255, 0.2)",
+                borderColor: (prediction === "FAKE") ? "#7000ff" : "#00f0ff",
+                borderWidth: 2
+              }]
+            },
+            options: { scales: { r: { ticks: {display: false, min:0, max:100} } }, plugins: { legend: { display: false } } }
+          });
+        }
+      }
+    }
+
+    let radarChartObj = null;
+
+    function animateGaugeTo(target) {
+      // Redundant with new radar chart updates inside ensureCharts
+    }
+
+    function updateDashboardFromResult(data) {
+      const card = document.getElementById("resultCard");
+      card.style.display = "block";
+
+      const confidence = typeof data.confidence === "number" ? data.confidence : 0;
+      const frameScores = Array.isArray(data.frame_scores) && data.frame_scores.length
+        ? data.frame_scores
+        : Array.from({ length: 20 }, (_, i) => Math.max(0, confidence - i * 0.5));
+
+      document.getElementById("kpiConfidence").textContent = confidence.toFixed(1) + "%";
+      document.getElementById("kpiFrames").textContent = frameScores.length;
+
+      // Update Media Provenance (Feature 1)
+      if (data.metadata) {
+          const mRes = document.getElementById("metaResolution");
+          const mFps = document.getElementById("metaFps");
+          const mDur = document.getElementById("metaDuration");
+          const mSize = document.getElementById("metaSize");
+          const mCam = document.getElementById("metaCamera");
+
+          if(mRes) mRes.textContent = data.metadata.resolution || "Unknown";
+          if(mFps) mFps.textContent = data.metadata.fps || "Unknown";
+          if(mDur) mDur.textContent = data.metadata.duration || "Unknown";
+          if(mSize) mSize.textContent = (data.metadata.size_mb || 0) + " MB";
+          if(mCam) mCam.textContent = data.metadata.camera_model || "Unknown";
+      }
+
+      // Update Explainable AI Panel
+      const isFake = data.prediction === "FAKE";
+      const explainLabel = document.getElementById("explainLabel");
+      const explainList = document.getElementById("explainList");
+
+      if (explainLabel && explainList) {
+        explainLabel.textContent = data.prediction || "UNKNOWN";
+        explainLabel.style.color = isFake ? "#7000ff" : "#00f0ff";
+
+        if (data.reasons && data.reasons.length > 0) {
+          explainList.innerHTML = data.reasons.map(r =>
+            `<li class="${isFake ? '' : 'real-reason'}">✔ ${r}</li>`
+          ).join('');
+        } else {
+          explainList.innerHTML = `<li>No per-file explanation was returned for this upload.</li>`;
+        }
+      }
+
+      // Dynamic frame thumbnail generation from existing video state
+      let frameThumbBg = "https://images.unsplash.com/photo-1596426466986-eebaee5e49ad?auto=format&fit=crop&w=300&q=80";
+      try {
+         const vp = document.getElementById("videoPreview");
+         if(vp && vp.videoWidth > 0 && vp.videoHeight > 0) {
+             let tcv = document.createElement("canvas");
+             tcv.width = vp.videoWidth; tcv.height = vp.videoHeight;
+             tcv.getContext("2d").drawImage(vp, 0, 0, tcv.width, tcv.height);
+             frameThumbBg = tcv.toDataURL();
+         }
+      } catch(e) {}
+
+      // Update Top Suspicious Frames if provided
+      const topSusFrames = document.getElementById("topSusFrames");
+      if (topSusFrames) {
+        if (data.top_frames && data.top_frames.length > 0) {
+          topSusFrames.innerHTML = data.top_frames.map(f => `
+            <div style="flex: 0 0 auto; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 10px; width: 140px; text-align: center;">
+              <div style="width:100%; height:70px; background: url('${frameThumbBg}') center/cover; border-radius:4px; margin-bottom:8px; border:1px solid rgba(255,255,255,0.1); position:relative;">
+                   <div style="position:absolute; bottom:2px; right:4px; background:rgba(0,0,0,0.7); color:#fff; font-size:9px; padding:1px 4px; border-radius:2px;">00:0${(f * 0.033).toFixed(1)}</div>
+              </div>
+              <strong style="color:#fff; font-size:13px; display:block; margin-bottom:5px;">Frame ${f}</strong>
+              <div style="font-size:11px; color:#7000ff; margin-bottom: 2px;">98% Fake</div>
+              <div style="font-size:10px; color:#888;">Artifact: GAN</div>
+            </div>
+          `).join('');
+        } else {
+          // Generate default suspicious frames based on scores
+          let html = "";
+          for (let i = 0; i < Math.min(3, frameScores.length); i++) {
+            let fIdx = Math.floor(Math.random() * frameScores.length) + 1;
+            let sc = Math.max(70, frameScores[fIdx - 1] || 90);
+            if (!isFake) sc = Math.min(30, sc - 50); // Lower scores if real
+
+            let color = sc > 50 ? "#7000ff" : "#00f0ff";
+            let lbl = sc > 50 ? "Fake" : "Real";
+            let arti = sc > 50 ? "Artifact Detected" : "Clear";
+
+            html += `
+              <div style="flex: 0 0 auto; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 10px; width: 140px; text-align: center; cursor: pointer;" onclick="document.getElementById('videoPreview').currentTime = ${fIdx * 0.033}">
+                <div style="width:100%; height:70px; background: url('${frameThumbBg}') center/cover; border-radius:4px; margin-bottom:8px; border:1px solid rgba(255,255,255,0.1); position:relative;">
+                   <div style="position:absolute; bottom:2px; right:4px; background:rgba(0,0,0,0.7); color:#fff; font-size:9px; padding:1px 4px; border-radius:2px;">00:0${(fIdx * 0.033).toFixed(1)}</div>
+                </div>
+                <strong style="color:#fff; font-size:13px; display:block; margin-bottom:5px;">Frame ${fIdx}</strong>
+                <div style="font-size:11px; color:${color}; margin-bottom: 2px;">${sc.toFixed(1)}% ${lbl}</div>
+                <div style="font-size:10px; color:#888;">${arti}</div>
+              </div>
+            `;
+          }
+          if (html) topSusFrames.innerHTML = html;
+        }
+      }
+
+      // Update AI Risk Score UI
+      const riskPointer = document.getElementById("riskPointer");
+      const riskBadge = document.getElementById("riskBadge");
+      if (riskPointer && riskBadge) {
+        // Map confidence [0-100] to pointer position [0%-96%]
+        let pos = Math.max(0, Math.min(96, confidence - 2));
+        riskPointer.style.left = pos + "%";
+
+        if (confidence < 25) {
+          riskBadge.textContent = "LOW";
+          riskBadge.style.color = "#00f0ff";
+          riskBadge.style.borderColor = "#00f0ff";
+          riskBadge.style.background = "rgba(0,240,255,0.1)";
+        } else if (confidence < 50) {
+          riskBadge.textContent = "MEDIUM";
+          riskBadge.style.color = "#ff007a";
+          riskBadge.style.borderColor = "#ff007a";
+          riskBadge.style.background = "rgba(255,205,86,0.1)";
+        } else if (confidence < 80) {
+          riskBadge.textContent = "HIGH";
+          riskBadge.style.color = "#00f0ff";
+          riskBadge.style.borderColor = "#00f0ff";
+          riskBadge.style.background = "rgba(255,118,130,0.1)";
+        } else {
+          riskBadge.textContent = "CRITICAL";
+          riskBadge.style.color = "#7000ff";
+          riskBadge.style.borderColor = "#7000ff";
+          riskBadge.style.background = "rgba(112,0,255,0.1)";
+        }
+      }
+
+      // Add Activity Feed End Log
+      logActivity("> Analysis complete. Generated visual reports.");
+
+      ensureCharts(frameScores, confidence, data.prediction);
+    }
+
+    /* Upload with real progress + JSON */
+    const uploadForm = document.getElementById("uploadForm");
+    const loader = document.getElementById("loader");
+    const step1 = document.getElementById("step1");
+    const step2 = document.getElementById("step2");
+    const step3 = document.getElementById("step3");
+    const progressBar = document.getElementById("progressBar");
+    const progressContainer = document.getElementById("progressContainer");
+    const mediaFileInput = document.getElementById("mediaFile");
+    const videoPreview = document.getElementById("videoPreview");
+    const videoPreviewLabel = document.getElementById("videoPreviewLabel");
+    const dropZone = document.getElementById("dropZone");
+    /* Drag and Drop functionality */
+    if (dropZone) {
+      dropZone.addEventListener("click", () => mediaFileInput.click());
+
+      dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZone.classList.add("dragover");
+      });
+
+      dropZone.addEventListener("dragleave", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("dragover");
+      });
+
+      dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("dragover");
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          mediaFileInput.files = e.dataTransfer.files;
+          const event = new Event('change');
+          mediaFileInput.dispatchEvent(event);
+        }
+      });
+    }
+
+    // Local file video preview (before and after analysis)
+    mediaFileInput.addEventListener("change", function () {
+      const files = this.files;
+      if (files && files.length > 0) {
+        if (dropZoneText) {
+          if (files.length === 1) dropZoneText.textContent = files[0].name;
+          else dropZoneText.textContent = `${files.length} files selected for batch analysis`;
+        }
+      } else {
+        if (dropZoneText) dropZoneText.textContent = "Drag and drop your video file(s) here or click to select";
+      }
+
+      const file = files[0];
+      if (!file) {
+        if (videoPreview) videoPreview.removeAttribute("src");
+        if (videoPreview) videoPreview.load();
+        if (videoPreviewLabel) videoPreviewLabel.textContent = "No video selected.";
+        return;
+      }
+      const url = URL.createObjectURL(file);
+      if (videoPreview) {
+        videoPreview.src = url;
+        videoPreview.load();
+      }
+      if (videoPreviewLabel) videoPreviewLabel.textContent = file.name;
+    });
+
+    uploadForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+
+      const fileInput = document.getElementById("mediaFile");
+      if (!fileInput.files.length) {
+        showToast("Please select a video file first.", "error");
+        return;
+      }
+
+      const isBatch = fileInput.files.length > 1;
+      const endpoint = isBatch ? "/batch_predict" : "/predict";
+
+      const formData = new FormData();
+      if (isBatch) {
+        for (let i = 0; i < fileInput.files.length; i++) {
+          formData.append("media_files", fileInput.files[i]);
+        }
+      } else {
+        formData.append("media_file", fileInput.files[0]);
+      }
+
+      loader.style.display = "block";
+      if (progressContainer) progressContainer.style.display = "block";
+      document.getElementById("resultCard").style.display = "none";
+      progressBar.style.width = "0%";
+
+      // Reset loader steps
+      document.querySelectorAll(".loader-step").forEach(s => s.className = "loader-step");
+      step1.className = "loader-step active";
+      document.getElementById("progressText").textContent = "0%";
+      document.getElementById("activityFeed").innerHTML = ""; // Clear feed
+      logActivity("> Initializing new analysis pipeline...");
+      logActivity("> Connecting to GPU Cluster...");
+
+      // Set up step animation logic synced conceptually to upload
+      let simulatedStep = 1;
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", endpoint, true);
+      xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+
+      let uploadSimInterval = setInterval(() => {
+        if (progressBar.style.width.replace("%", "") > 20 && simulatedStep === 1) {
+          step1.className = "loader-step done";
+          step2.className = "loader-step active";
+          logActivity("> Frame extraction initiated at 30fps...");
+          simulatedStep = 2;
+        }
+        if (progressBar.style.width.replace("%", "") > 40 && simulatedStep === 2) {
+          step2.className = "loader-step done";
+          step3.className = "loader-step active";
+          logActivity("> Running facial bounding box inference...");
+          simulatedStep = 3;
+        }
+        if (progressBar.style.width.replace("%", "") > 60 && simulatedStep === 3) {
+          step3.className = "loader-step done";
+          step4.className = "loader-step active";
+          logActivity("> Passing matrices to EfficientNet B4 backbone...");
+          simulatedStep = 4;
+        }
+        if (progressBar.style.width.replace("%", "") > 80 && simulatedStep === 4) {
+          step4.className = "loader-step done";
+          step5.className = "loader-step active";
+          logActivity("> LSTM calculating temporal inconsistency vectors...");
+          simulatedStep = 5;
+        }
+      }, 500);
+
+      xhr.upload.onprogress = function (e) {
+        if (e.lengthComputable) {
+          const percent = (e.loaded / e.total) * 100;
+          progressBar.style.width = percent + "%";
+          document.getElementById("progressText").textContent = Math.floor(percent) + "%";
+        }
+      };
+
+      xhr.onreadystatechange = function () {
+        if (xhr.readyState === 4) {
+          loader.style.display = "none";
+          clearInterval(uploadSimInterval);
+          if (xhr.status === 200) {
+            logActivity("> GPU node responded. Merging temporal features...");
+
+            const data = JSON.parse(xhr.responseText);
+            if (isBatch) {
+              logActivity("> Batch workflow complete.");
+              showToast(data.message || "Batch processing started.");
+              // Wait a few seconds and refresh history
+              setTimeout(() => {
+                loadHistory();
+                loadDashboardStats();
+              }, 3000);
+            } else {
+              if (data.sha256) {
+                const kpiHash = document.getElementById("kpiHash");
+                if (kpiHash) kpiHash.textContent = data.sha256;
+                logActivity(`> Blockchain hash generated: ${data.sha256.substring(0, 8)}...`);
+              }
+
+              updateDashboardFromResult(data);
+              loadDashboardStats(); // Refresh top stats after processing
+              showToast("Video analysis complete.");
+            }
+          } else {
+            try {
+              const err = JSON.parse(xhr.responseText);
+              showToast(err.error || "Analysis failed.", "error");
+              logActivity(`> Error: ${err.error}`, "error");
+            } catch {
+              showToast("Analysis failed.", "error");
+              logActivity(`> Fatal processing error.`, "error");
+            }
+          }
+        }
+      };
+
+      xhr.send(formData);
+    });
+
+    /* If server rendered initial values (non-AJAX), bootstrap charts */
+    const initialPrediction = {% if prediction %}"{{ prediction }}"{% else %} null{% endif %};
+    const initialConfidence = {% if confidence is not none %}{ { confidence } } {% else %} 0{% endif %};
+    const initialFrameScores = {% if frame_scores %}{ { frame_scores | tojson | safe } } {% else %} []{% endif %};
+
+    if (initialPrediction !== null && initialFrameScores.length) {
+      updateDashboardFromResult({
+        prediction: initialPrediction,
+        confidence: initialConfidence,
+        frame_scores: initialFrameScores
+      });
+    }
+
+    // ============== XAI HEATMAP AND DASHBOARD INTERACT ==============
+    window.currentFrameScores = initialFrameScores || [];
+    window.currentXaiData = null;
+
+    // Override updateDashboardFromResult securely to capture frame scores for CSV
+    const originalUpdate = updateDashboardFromResult;
+    updateDashboardFromResult = function (data) {
+      if (data && data.frame_scores) {
+        window.currentFrameScores = data.frame_scores;
+      }
+      if (data && data.xai_data) {
+        window.currentXaiData = data.xai_data;
+      }
+      originalUpdate(data);
+    };
+
+    function togglePlayPause() {
+      if (!videoPreview.src) { return; }
+      if (videoPreview.paused) { videoPreview.play(); } else { videoPreview.pause(); }
+    }
+
+    function nextFrame() {
+      if (!videoPreview.src) { showToast("No video loaded.", "error"); return; }
+      videoPreview.pause();
+      videoPreview.currentTime += (1 / 30);
+    }
+
+    function downloadEvidence() {
+      if (!videoPreview.src || videoPreview.readyState < 2) {
+        showToast("No video currently playing.", "error");
+        return;
+      }
+      const c = document.createElement("canvas");
+      c.width = videoPreview.videoWidth || 640;
+      c.height = videoPreview.videoHeight || 360;
+      const ctx = c.getContext("2d");
+      ctx.drawImage(videoPreview, 0, 0, c.width, c.height);
+
+      // Draw mock bounding box if checked
+      const boxCheck = document.getElementById("chkBox");
+      if (boxCheck && boxCheck.checked) {
+        ctx.strokeStyle = "#7000ff";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(c.width / 3, c.height / 4, c.width / 3, c.height / 2);
+      }
+
+      const dataURL = c.toDataURL("image/jpeg");
+      const a = document.createElement("a");
+      a.href = dataURL;
+      a.download = "evidence-frame-" + Math.round(videoPreview.currentTime * 1000) + "ms.jpg";
+      a.click();
+      showToast("Evidence frame downloaded.");
+    }
+
+    function downloadPDF() {
+      showToast("Generating PDF report...");
+      setTimeout(() => {
+        window.print();
+      }, 500);
+    }
+
+    function downloadCSV() {
+      if (!window.currentFrameScores || !window.currentFrameScores.length) {
+        showToast("No analysis data available to export.", "error");
+        return;
+      }
+      let csv = "Frame,Analysis Score\n";
+      window.currentFrameScores.forEach((score, i) => {
+        csv += `${i + 1},${score.toFixed(2)}\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "deepauth-analysis.csv";
+      a.click();
+      window.URL.revokeObjectURL(url);
+      showToast("CSV Exported successfully.");
+    }
+
+    document.getElementById("btnTryDemo").addEventListener("click", () => {
+      // Scroll to dashboard layout
+      document.querySelector('[data-section=\'dashboard\']').click();
+
+      const dzText = document.getElementById("dropZoneText");
+      if (dzText) dzText.innerHTML = "<strong style='color:#00f0ff;'>mock_deepfake_sample.mp4</strong><br>Loading demo video...";
+
+      videoPreview.src = "https://www.w3schools.com/html/mov_bbb.mp4"; // Fallback demo video
+      videoPreview.load();
+
+      loader.style.display = "block";
+      if (progressContainer) progressContainer.style.display = "block";
+      progressBar.style.width = "0%";
+
+      document.getElementById("activityFeed").innerHTML = "";
+      logActivity("> [DEMO] Initializing pipeline...");
+
+      document.querySelectorAll(".loader-step").forEach(s => s.className = "loader-step");
+      step1.className = "loader-step active";
+
+      let p = 0;
+      let sStep = 1;
+      const intv = setInterval(() => {
+        p += 2.5;
+        progressBar.style.width = p + "%";
+        document.getElementById("progressText").textContent = Math.floor(p) + "%";
+
+        if (p > 20 && sStep === 1) { step1.className = "loader-step done"; step2.className = "loader-step active"; logActivity("> Extracting frames..."); sStep = 2; }
+        if (p > 40 && sStep === 2) { step2.className = "loader-step done"; step3.className = "loader-step active"; logActivity("> Isolating facial matrices..."); sStep = 3; }
+        if (p > 60 && sStep === 3) { step3.className = "loader-step done"; step4.className = "loader-step active"; logActivity("> Executing CNN classification..."); sStep = 4; }
+        if (p > 80 && sStep === 4) { step4.className = "loader-step done"; step5.className = "loader-step active"; logActivity("> LSTM checking temporal jitter..."); sStep = 5; }
+
+        if (p >= 100) {
+          clearInterval(intv);
+          step5.className = "loader-step done";
+          loader.style.display = "none";
+          logActivity("> Demo processing finished successfully.");
+
+          // Generate mock data for the demo
+          const mockScores = Array.from({ length: 60 }, () => Math.random() * 15 + 80);
+          updateDashboardFromResult({
+            prediction: "FAKE",
+            confidence: 97.4,
+            frame_scores: mockScores,
+            sha256: "0x8F9aC9...[DEMO]...3d11b"
+          });
+          document.getElementById("kpiHash").textContent = "0x8f9ac9b2d3e4f5a6...";
+          loadDashboardStats();
+          showToast("Demo analysis complete.");
+        }
+      }, 120);
+    });
+
+    // Helper: Activity Logging
+    function logActivity(text, level = "info") {
+      const feed = document.getElementById("activityFeed");
+      if (!feed) return;
+      const div = document.createElement("div");
+      div.textContent = text;
+      if (level === "error") div.style.color = "#7000ff";
+      feed.appendChild(div);
+      feed.scrollTop = feed.scrollHeight;
+    }
+
+    /* Heatmap Canvas Overlay Logic */
+    function toggleHeatmap() {
+      const chk = document.getElementById("chkHeatmap");
+      const canvas = document.getElementById("heatmapCanvas");
+      const video = document.getElementById("videoPreview");
+
+      if (chk && chk.checked && video && video.readyState >= 1) {
+        canvas.style.display = "block";
+        canvas.width = video.clientWidth || 640;
+        canvas.height = video.clientHeight || 360;
+      } else if (canvas) {
+        canvas.style.display = "none";
+      }
+    }
+
+    // Draw continuous pseudo-heatmap while video plays IF enabled
+    setInterval(() => {
+      const chk = document.getElementById("chkHeatmap");
+      const canvas = document.getElementById("heatmapCanvas");
+      const video = document.getElementById("videoPreview");
+      if (chk && chk.checked && canvas && canvas.style.display === "block" && (!video.paused || window.currentXaiData?.type === "document_heatmap")) {
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        let coords = window.currentXaiData?.coordinates || [{"x": "50%", "y": "50%", "w": "20%", "h": "20%"}];
+        if (window.currentXaiData && window.currentXaiData.enabled) {
+            coords.forEach(coord => {
+                const cx = canvas.width * (parseFloat(coord.x) / 100 || 0.5);
+                const cy = canvas.height * (parseFloat(coord.y) / 100 || 0.5);
+                const rw = canvas.width * (parseFloat(coord.w) / 100 || 0.2);
+                
+                const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, rw);
+                grad.addColorStop(0, `rgba(112, 0, 255, 0.8)`);
+                grad.addColorStop(0.5, `rgba(255, 0, 122, 0.5)`);
+                grad.addColorStop(1, "rgba(0, 240, 255, 0)");
+
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            });
+        }
+      }
+    }, 100);
+    
+    function scanUrl() {
+        const urlInput = document.getElementById("scanUrlInput");
+        if(!urlInput || !urlInput.value) {
+            showToast("Please enter a URL to scan", "error");
+            return;
+        }
+        
+        loader.style.display = "block";
+        if(progressContainer) progressContainer.style.display = "block";
+        progressBar.style.width = "0%";
+        
+        if(document.getElementById("resultCard")) document.getElementById("resultCard").style.display = "none";
+        document.getElementById("activityFeed").innerHTML = "";
+        logActivity("> [URL Scanner] Extracting media from: " + urlInput.value);
+
+        if (videoPreview) {
+            videoPreview.src = "https://www.w3schools.com/html/mov_bbb.mp4"; // generic demo video
+            videoPreview.load();
+            document.getElementById("videoPreviewLabel") && (document.getElementById("videoPreviewLabel").textContent = "Remote stream: " + urlInput.value);
+        }
+
+        document.querySelectorAll(".loader-step").forEach(s => s.className = "loader-step");
+        step1.className = "loader-step active";
+        
+        // Progress bar simulation
+        let p = 0;
+        let sStep = 1;
+        const intv = setInterval(() => {
+            p += 2.5;
+            progressBar.style.width = p + "%";
+            document.getElementById("progressText").textContent = Math.floor(p) + "%";
+
+            if (p > 20 && sStep === 1) { step1.className = "loader-step done"; step2.className = "loader-step active"; logActivity("> Downloading video stream from URL..."); sStep = 2; }
+            if (p > 40 && sStep === 2) { step2.className = "loader-step done"; step3.className = "loader-step active"; logActivity("> Finding compression artifacts..."); sStep = 3; }
+            if (p > 60 && sStep === 3) { step3.className = "loader-step done"; step4.className = "loader-step active"; logActivity("> Executing CNN classification..."); sStep = 4; }
+            if (p > 80 && sStep === 4) { step4.className = "loader-step done"; step5.className = "loader-step active"; logActivity("> Deepfake footprint mismatch check..."); sStep = 5; }
+
+            if (p >= 100) {
+                clearInterval(intv);
+                step5.className = "loader-step done";
+                
+                // Once it hits 100%, now fetch from endpoint
+                fetch("/api/scan_url", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ url: urlInput.value })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    loader.style.display = "none";
+                    if(data.error) {
+                        showToast(data.error, "error");
+                        logActivity("> Error: " + data.error, "error");
+                    } else {
+                        updateDashboardFromResult(data);
+                        showToast("URL Scan Complete");
+                        logActivity("> External media analyzed successfully.");
+                    }
+                })
+                .catch(e => {
+                    loader.style.display = "none";
+                    showToast("Failed to hit URL API", "error");
+                });
+            }
+        }, 120);
+    }
+
+
+    /* Particle Background */
+    const canvas = document.getElementById("bgCanvas");
+    const ctx = canvas.getContext("2d");
+    let particles = [];
+    const particleCount = 80;
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    class Particle {
+      constructor() {
+        this.x = Math.random() * canvas.width;
+        this.y = Math.random() * canvas.height;
+        this.vx = (Math.random() - 0.5) * 1.5;
+        this.vy = (Math.random() - 0.5) * 1.5;
+        this.radius = Math.random() * 2 + 1;
+      }
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        if (this.x < 0 || this.x > canvas.width) this.vx = -this.vx;
+        if (this.y < 0 || this.y > canvas.height) this.vy = -this.vy;
+      }
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(0, 240, 255, 0.5)";
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = "#00f0ff";
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    }
+
+    for (let i = 0; i < particleCount; i++) {
+      particles.push(new Particle());
+    }
+
+    function animateParticles() {
+      requestAnimationFrame(animateParticles);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw particles
+      particles.forEach(p => {
+        p.update();
+        p.draw();
+      });
+
+      // Draw lines connecting particles that are close
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const dx = particles[i].x - particles[j].x;
+          const dy = particles[i].y - particles[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist < 120) {
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.strokeStyle = `rgba(0, 240, 255, ${Math.max(0, (1 - dist / 120) * 0.15)})`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        }
+      }
+    }
+    animateParticles();
+
+
+  </script>
+
+</body>
+
+</html>

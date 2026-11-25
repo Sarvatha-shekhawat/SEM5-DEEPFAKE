@@ -1,0 +1,21 @@
+# Python environments and generated files
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Local runtime state and uploaded user content
+Deepfake/uploads/
+Deepfake/history.db
+*.db
+*.sqlite*
+
+# Local secrets and editor metadata
+.env
+.env.*
+!.env.example
+.DS_Store
+
+# Training outputs and logs
+*.log
+checkpoints/
